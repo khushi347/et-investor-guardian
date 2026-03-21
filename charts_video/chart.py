@@ -5,7 +5,6 @@ import pandas as pd
 def plot_stock(stock_symbol):
     data = yf.download(stock_symbol, period="1mo", interval="1d")
 
-    # 🔥 FIX: flatten multi-level columns
     data.columns = data.columns.get_level_values(0)
 
     data = data.reset_index()
