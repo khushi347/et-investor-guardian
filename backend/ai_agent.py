@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
 from groq import Groq
-from .data_fetcher import get_market_data
+from backend.data_fetcher import get_market_data
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
