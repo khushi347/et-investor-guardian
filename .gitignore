@@ -1,6 +1,6 @@
 __pycache__/
-*.pyc
-.venv/
+*.py[cod]
 venv/
 .env
-*.mp3
+output.mp3
+*.png

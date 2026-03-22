@@ -4,58 +4,69 @@ import pandas as pd
 import pandas_ta as ta
 
 def plot_stock(stock_symbol):
-    # 1. Fetch data (1 month for trend, but we fetch 6 months to calculate 200-day EMA later)
-    # For today's 1-month view, we'll slice the display but keep the data for logic
-    data = yf.download(stock_symbol, period="3mo", interval="1d")
-    
-    if data.empty:
-        return None
-
-    # Fix multi-level columns from yfinance
+    # 1. Fetch 1 year of data to calculate the 200 SMA accurately
+    data = yf.download(stock_symbol, period="1y", interval="1d")
+    if data.empty: return None
     data.columns = data.columns.get_level_values(0)
-    
-    # 2. Calculate Indicators (Prep for March 22 Milestone)
-    data['EMA_20'] = ta.ema(data['Close'], length=20)
-    data['RSI'] = ta.rsi(data['Close'], length=14)
-    
-    # Reset index to get Date as a column
-    data = data.reset_index()
 
-    # 3. Create a Candlestick Chart (More professional than a line)
+    # 2. Calculate Indicators
+    data['SMA_50'] = ta.sma(data['Close'], length=50)
+    data['SMA_200'] = ta.sma(data['Close'], length=200)
+    data['RSI'] = ta.rsi(data['Close'], length=14)
+
+    # Signal Logic: Golden Cross (50 crosses above 200)
+    data['Prev_SMA_50'] = data['SMA_50'].shift(1)
+    data['Prev_SMA_200'] = data['SMA_200'].shift(1)
+    
+    golden_cross = data[(data['SMA_50'] > data['SMA_200']) & (data['Prev_SMA_50'] <= data['Prev_SMA_200'])]
+    
+    # Signal Logic: RSI Extremes
+    rsi_oversold = data[data['RSI'] < 30]
+    rsi_overbought = data[data['RSI'] > 70]
+
+    # Slice for the last 6 months for the actual display (cleaner UI)
+    display_data = data.tail(120).reset_index()
+    golden_cross_display = golden_cross[golden_cross.index >= display_data['Date'].min()]
+
+    # 3. Create Chart
     fig = go.Figure()
 
-    # Add Candlesticks
+    # Base Candlesticks
     fig.add_trace(go.Candlestick(
-        x=data['Date'],
-        open=data['Open'],
-        high=data['High'],
-        low=data['Low'],
-        close=data['Close'],
-        name='Price'
+        x=display_data['Date'], open=display_data['Open'], high=display_data['High'],
+        low=display_data['Low'], close=display_data['Close'], name='Price'
     ))
 
-    # Add a Trend Line (20-day EMA)
+    # Add Golden Cross Markers
     fig.add_trace(go.Scatter(
-        x=data['Date'], 
-        y=data['EMA_20'],
-        line=dict(color='#00ff88', width=1.5),
-        name='Guardian Trend (20 EMA)'
+        x=golden_cross_display.index, y=golden_cross_display['SMA_50'],
+        mode='markers', name='GOLDEN CROSS',
+        marker=dict(symbol='triangle-up', size=15, color='#00ff00', line=dict(width=2, color='white'))
     ))
 
-    # 4. Professional "War Room" Styling
-    fig.update_layout(
-        title=f"🛡️ {stock_symbol} - Market Signal Guard",
-        template="plotly_dark",
-        xaxis_rangeslider_visible=False, # Hides the messy slider at the bottom
-        height=500,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=10, r=10, t=50, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
+    # Add RSI Oversold (Buy Signal) Markers
+    fig.add_trace(go.Scatter(
+        x=display_data[display_data['RSI'] < 30]['Date'], 
+        y=display_data[display_data['RSI'] < 30]['Low'] * 0.98,
+        mode='markers', name='RSI Oversold',
+        marker=dict(symbol='circle', size=8, color='#00d9ff')
+    ))
 
-    # Add Rupee Prefix and Grid Styling
-    fig.update_yaxes(tickprefix="₹", gridcolor='#333')
-    fig.update_xaxes(gridcolor='#333') 
+    # 4. Professional Styling (War Room)
+    fig.update_layout(
+        title=f"🛡️ {stock_symbol} - Signal Intelligence",
+        template="plotly_dark",
+        xaxis_rangeslider_visible=False,
+        height=600,
+        paper_bgcolor='#0b1117',
+        plot_bgcolor='#0b1117',
+        legend=dict(orientation="h", y=1.05)
+    )
+    # Add these traces to your chart.py
+    fig.add_trace(go.Scatter(x=display_data['Date'], y=display_data['SMA_50'], 
+                         line=dict(color='orange', width=1), name='50 SMA'))
+
+    fig.add_trace(go.Scatter(x=display_data['Date'], y=display_data['SMA_200'], 
+                         line=dict(color='red', width=1), name='200 SMA'))
 
     return fig
