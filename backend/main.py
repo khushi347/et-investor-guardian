@@ -1,7 +1,7 @@
 # main.py
 
 from fastapi import FastAPI
-from ai_agent import generate_advice
+from .ai_agent import generate_advice
 
 app = FastAPI()
 
