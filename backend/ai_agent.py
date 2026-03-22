@@ -1,27 +1,34 @@
-# ai_agent.py
+import os
+from dotenv import load_dotenv
 
-from data_fetcher import get_market_data
+# 🔥 FORCE LOAD .env FROM ROOT
+load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
+from groq import Groq
+from .data_fetcher import get_market_data
 
-def generate_advice(ticker, portfolio=None):
-    data = get_market_data(ticker)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    price = data["price"]["change_percent"]
-    signal = data["signals"][0]["action"]
+def generate_advice(ticker, user_query="Analyze this stock for me", portfolio=None):
+    """
+    Combines:
+    - M1: Market data
+    - M2: AI reasoning
+    - M4: Signal + Portfolio + Risk logic
+    """
 
-    decision = "HOLD"
+    # 🔹 1. Fetch market data (M1)
+    market_data = get_market_data(ticker)
+
+    price = market_data.get("price", 0)
+    change = market_data.get("change_percent", 0)
+    signal = market_data.get("signal", "HOLD")
+
     reason = []
+    decision = "HOLD"
     risk = "Moderate"
 
-    # 📊 Price logic
-    if price > 1:
-        decision = "BUY"
-        reason.append("Positive price momentum")
-    elif price < -1:
-        decision = "SELL"
-        reason.append("Negative trend detected")
-
-    # 🏦 Signal logic
+    # 🔹 2. Signal Logic (YOUR LOGIC)
     if signal == "BUY":
         decision = "BUY"
         reason.append("Institutional buying observed")
@@ -29,18 +36,48 @@ def generate_advice(ticker, portfolio=None):
         decision = "SELL"
         reason.append("Institutional selling observed")
 
-    # 🧠 Portfolio awareness
+    # 🔹 3. Portfolio Awareness (YOUR LOGIC)
     if portfolio and ticker.replace(".NS", "") in portfolio:
         reason.append("You already hold this stock")
 
-    # ⚠️ Risk logic
-    if abs(price) > 2:
+    # 🔹 4. Risk Logic (YOUR LOGIC)
+    if abs(change) > 2:
         risk = "High"
 
+    # 🔹 5. AI Prompt (M2 LOGIC)
+    prompt = f"""
+You are a smart financial assistant.
+
+Stock: {ticker}
+Price: {price}
+Change: {change}%
+
+User Portfolio: {portfolio}
+
+User Question:
+{user_query}
+
+Give a short, clear explanation whether to BUY, SELL, or HOLD.
+"""
+
+    # 🔹 6. AI Response (M2)
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama3-8b-8192",
+        )
+
+        ai_response = chat_completion.choices[0].message.content.strip()
+        reason.append(ai_response)
+
+    except Exception as e:
+        reason.append("AI analysis unavailable")
+
+    # 🔹 7. Final Output
     return {
         "stock": ticker,
         "decision": decision,
         "reason": ", ".join(reason),
         "risk": risk,
-        "data": data
+        "data": market_data
     }
