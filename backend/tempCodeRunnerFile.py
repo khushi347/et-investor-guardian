@@ -1,0 +1,1 @@
+print("API KEY:", os.getenv("GROQ_API_KEY"))
