@@ -109,7 +109,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# 👤 SIDEBAR
+# SIDEBAR
 # =========================
 with st.sidebar:
     st.markdown('<div class="sidebar-title">Investor Profile</div>', unsafe_allow_html=True)
@@ -141,10 +141,10 @@ with left:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. ✅ NEW: PORTFOLIO TABLE (Added for M3)
+    # 2.PORTFOLIO TABLE
     st.markdown('<p class="section-header">Portfolio Inventory</p>', unsafe_allow_html=True)
     
-    # Dummy Data - replace with your real portfolio logic later
+    # Dummy Data 
     portfolio_df = pd.DataFrame({
         "Ticker": ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS"],
         "Holdings": [15, 10, 50, 25],
