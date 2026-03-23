@@ -1,5 +1,5 @@
 # utils.py
-
+import pandas as pd
 from datetime import datetime
 
 
@@ -46,3 +46,21 @@ def clean_symbol(symbol):
 # 🔥 Generate simple ID
 def generate_id(index):
     return index + 1
+
+def parse_portfolio_csv(file_path):
+    try:
+        df = pd.read_csv(file_path)
+
+        portfolio = {}
+
+        for _, row in df.iterrows():
+            stock = str(row["Stock"]).strip().upper()
+            quantity = int(row["Quantity"])
+
+            portfolio[stock] = quantity
+
+        return portfolio
+
+    except Exception as e:
+        print("CSV Parsing Error:", e)
+        return {}

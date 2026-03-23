@@ -1,34 +1,40 @@
 import os
 from dotenv import load_dotenv
-
-# 🔥 FORCE LOAD .env FROM ROOT
-load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
-
 from groq import Groq
-from .data_fetcher import get_market_data
+
+from data_fetcher import get_market_data
+from utils import parse_portfolio_csv   # ✅ FIXED IMPORT
+
+# Load env
+load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-def generate_advice(ticker, user_query="Analyze this stock for me", portfolio=None):
+
+def generate_advice(ticker, user_query, portfolio_path="portfolio.csv"):
     """
     Combines:
     - M1: Market data
     - M2: AI reasoning
-    - M4: Signal + Portfolio + Risk logic
+    - M4: Portfolio + Risk logic
     """
 
-    # 🔹 1. Fetch market data (M1)
+    # 🔹 Load portfolio
+    portfolio = parse_portfolio_csv(portfolio_path)
+
+    # 🔹 Fetch market data
     market_data = get_market_data(ticker)
 
-    price = market_data.get("price", 0)
-    change = market_data.get("change_percent", 0)
-    signal = market_data.get("signal", "HOLD")
+    price = market_data["price"]["current_price"]
+    change = market_data["price"]["change_percent"]
+
+    signal = market_data["signals"][0]["action"] if market_data["signals"] else "HOLD"
 
     reason = []
     decision = "HOLD"
     risk = "Moderate"
 
-    # 🔹 2. Signal Logic (YOUR LOGIC)
+    # 🔹 Signal Logic
     if signal == "BUY":
         decision = "BUY"
         reason.append("Institutional buying observed")
@@ -36,15 +42,16 @@ def generate_advice(ticker, user_query="Analyze this stock for me", portfolio=No
         decision = "SELL"
         reason.append("Institutional selling observed")
 
-    # 🔹 3. Portfolio Awareness (YOUR LOGIC)
-    if portfolio and ticker.replace(".NS", "") in portfolio:
+    # 🔹 Portfolio Logic
+    stock_name = ticker.replace(".NS", "")
+    if stock_name in portfolio:
         reason.append("You already hold this stock")
 
-    # 🔹 4. Risk Logic (YOUR LOGIC)
+    # 🔹 Risk Logic
     if abs(change) > 2:
         risk = "High"
 
-    # 🔹 5. AI Prompt (M2 LOGIC)
+    # 🔹 AI Prompt
     prompt = f"""
 You are a smart financial assistant.
 
@@ -60,7 +67,7 @@ User Question:
 Give a short, clear explanation whether to BUY, SELL, or HOLD.
 """
 
-    # 🔹 6. AI Response (M2)
+    # 🔹 AI Response
     try:
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
@@ -73,7 +80,7 @@ Give a short, clear explanation whether to BUY, SELL, or HOLD.
     except Exception as e:
         reason.append("AI analysis unavailable")
 
-    # 🔹 7. Final Output
+    # 🔹 Final Output
     return {
         "stock": ticker,
         "decision": decision,
