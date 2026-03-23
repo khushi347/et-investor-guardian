@@ -8,14 +8,15 @@ sys.path.append(os.path.dirname(__file__))
 
 load_dotenv()
 
-# m2's debug line (helpful for now)
-print("API KEY:", os.getenv("GROQ_API_KEY"))
+# m2's debug line (remove later)
+
 
 from groq import Groq
-from backend.data_fetcher import get_market_data
-from backend.utils import parse_portfolio_csv  # ✅ Your Fixed Import
+from data_fetcher import get_market_data
+from utils import parse_portfolio_csv
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 
 def build_prompt(ticker, market_data, user_query, portfolio):
     return f"""
@@ -55,6 +56,36 @@ Example:
 """
 
 
+# 🔥 NEW: ₹ IMPACT FUNCTION
+def calculate_impact(ticker, market_data, portfolio):
+    if not portfolio:
+        return "₹0"
+
+    stock = ticker.replace(".NS", "")
+
+    if stock not in portfolio:
+        return "₹0"
+
+    quantity = portfolio[stock]
+
+    price_data = market_data.get("price", {})
+    current_price = price_data.get("current_price", 0)
+    change_percent = price_data.get("change_percent", 0)
+
+    # price movement in ₹
+    price_change = (change_percent / 100) * current_price
+
+    impact = quantity * price_change
+
+    # format result
+    if impact > 0:
+        return f"+₹{int(impact)}"
+    elif impact < 0:
+        return f"-₹{abs(int(impact))}"
+    else:
+        return "₹0"
+
+
 def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
     print("STEP 1: Fetching market data...")
 
@@ -69,27 +100,36 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
 
     try:
         chat_completion = client.chat.completions.create(
-    messages=[{"role": "user", "content": prompt}],
-    model="llama-3.3-70b-versatile",
-)
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile",
+        )
 
         raw_output = chat_completion.choices[0].message.content.strip()
 
         print("STEP 4: AI raw output:", raw_output)
 
-        # 🔥 IMPORTANT: Convert AI → JSON
+        # 🔥 Convert AI → JSON
         result = json.loads(raw_output)
 
         print("STEP 5: Parsed AI response")
 
-        return result
+        # 🔥 NEW: Calculate impact
+        impact = calculate_impact(ticker, market_data, portfolio)
+
+        # 🔥 FINAL CLEAN OUTPUT
+        return {
+            "insight": result.get("insight", ""),
+            "reason": result.get("reason", ""),
+            "risk": result.get("risk", ""),
+            "impact": impact
+        }
 
     except Exception as e:
         print("ERROR:", str(e))
 
-        # 🔥 fallback (never break UI)
         return {
             "insight": "Unable to analyze",
             "reason": "AI service error or invalid response",
-            "risk": "Unknown"
+            "risk": "Unknown",
+            "impact": "₹0"
         }
