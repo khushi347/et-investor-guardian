@@ -36,31 +36,69 @@ def get_confidence(alert_type):
         return "Low"
 
 
-# 🧠 Clean stock symbol (just in case)
+#  Clean stock symbol 
 def clean_symbol(symbol):
     if symbol:
         return symbol.upper().strip()
     return "UNKNOWN"
 
 
-# 🔥 Generate simple ID
+# Generate simple ID
 def generate_id(index):
     return index + 1
 
-def parse_portfolio_csv(file_path):
+def parse_portfolio_csv(file):
+    import pandas as pd
+
     try:
-        df = pd.read_csv(file_path)
+        if file.name.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+
+        print("RAW:", df.head())
+
+        # 🔥 Strong cleaning
+        df.columns = (
+            df.columns
+            .str.strip()
+            .str.lower()
+            .str.replace(r'[^a-z0-9 ]', '', regex=True)
+        )
+
+        print("CLEANED COLUMNS:", df.columns.tolist())
+
+        ticker_col = None
+        qty_col = None
+
+        for col in df.columns:
+            if 'tick' in col or 'symbol' in col or 'stock' in col:
+                ticker_col = col
+            if 'qty' in col or 'hold' in col or 'quantity' in col:
+                qty_col = col
+
+        print("DETECTED:", ticker_col, qty_col)
+
+        if ticker_col is None or qty_col is None:
+            return {}
 
         portfolio = {}
 
         for _, row in df.iterrows():
-            stock = str(row["Stock"]).strip().upper()
-            quantity = int(row["Quantity"])
+            symbol = str(row[ticker_col]).strip().upper()
 
-            portfolio[stock] = quantity
+            if symbol and symbol.lower() not in ['nan', 'none', '']:
+                try:
+                    qty = int(float(row[qty_col]))
+                except:
+                    qty = 0
+
+                portfolio[symbol] = qty
+
+        print("FINAL PORTFOLIO:", portfolio)
 
         return portfolio
 
     except Exception as e:
-        print("CSV Parsing Error:", e)
+        print("Parser Error:", e)
         return {}
