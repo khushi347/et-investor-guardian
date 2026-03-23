@@ -1,91 +1,95 @@
-
-from groq import Groq
-from backend.data_fetcher import get_market_data
-from backend.utils import parse_portfolio_csv   # ✅ FIXED IMPORT
-
-# Load env
-from dotenv import load_dotenv
+import sys
 import os
+import json
+from dotenv import load_dotenv
+
+# m2's fix for imports
+sys.path.append(os.path.dirname(__file__))
 
 load_dotenv()
 
+# m2's debug line (helpful for now)
+print("API KEY:", os.getenv("GROQ_API_KEY"))
+
+from groq import Groq
+from backend.data_fetcher import get_market_data
+from backend.utils import parse_portfolio_csv  # ✅ Your Fixed Import
+
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-
-def generate_advice(ticker, user_query, portfolio_path="portfolio.csv"):
-    """
-    Combines:
-    - M1: Market data
-    - M2: AI reasoning
-    - M4: Portfolio + Risk logic
-    """
-
-    # 🔹 Load portfolio
-    portfolio = parse_portfolio_csv(portfolio_path)
-
-    # 🔹 Fetch market data
-    market_data = get_market_data(ticker)
-
-    price = market_data["price"]["current_price"]
-    change = market_data["price"]["change_percent"]
-
-    signal = market_data["signals"][0]["action"] if market_data["signals"] else "HOLD"
-
-    reason = []
-    decision = "HOLD"
-    risk = "Moderate"
-
-    # 🔹 Signal Logic
-    if signal == "BUY":
-        decision = "BUY"
-        reason.append("Institutional buying observed")
-    elif signal == "SELL":
-        decision = "SELL"
-        reason.append("Institutional selling observed")
-
-    # 🔹 Portfolio Logic
-    stock_name = ticker.replace(".NS", "")
-    if stock_name in portfolio:
-        reason.append("You already hold this stock")
-
-    # 🔹 Risk Logic
-    if abs(change) > 2:
-        risk = "High"
-
-    # 🔹 AI Prompt
-    prompt = f"""
-You are a smart financial assistant.
+def build_prompt(ticker, market_data, user_query, portfolio):
+    return f"""
+You are an expert AI financial advisor for the Indian stock market.
 
 Stock: {ticker}
-Price: {price}
-Change: {change}%
 
-User Portfolio: {portfolio}
+Market Data:
+Price Info: {market_data.get("price")}
+Signals: {market_data.get("signals")}
+News: {market_data.get("news")}
+
+User Portfolio:
+{portfolio}
 
 User Question:
 {user_query}
 
-Give a short, clear explanation whether to BUY, SELL, or HOLD.
+Instructions:
+- Be smart and context-aware
+- If user already holds the stock → mention it
+- Avoid suggesting over-allocation
+- Use signals (bulk deals, price change, news)
+- Keep answers short (1–2 lines max)
+
+Rules:
+- Output STRICT JSON
+- Only keys: insight, reason, risk
+- No extra text
+
+Example:
+{{
+  "insight": "Hold TCS",
+  "reason": "Since you already hold TCS, adding more may increase concentration risk",
+  "risk": "Moderate due to overexposure"
+}}
 """
 
-    # 🔹 AI Response
+
+def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
+    print("STEP 1: Fetching market data...")
+
+    # 🔹 M1: Market Data
+    market_data = get_market_data(ticker)
+
+    print("STEP 2: Building AI prompt...")
+
+    prompt = build_prompt(ticker, market_data, user_query, portfolio)
+
+    print("STEP 3: Calling AI...")
+
     try:
         chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama3-8b-8192",
-        )
+    messages=[{"role": "user", "content": prompt}],
+    model="llama-3.3-70b-versatile",
+)
 
-        ai_response = chat_completion.choices[0].message.content.strip()
-        reason.append(ai_response)
+        raw_output = chat_completion.choices[0].message.content.strip()
+
+        print("STEP 4: AI raw output:", raw_output)
+
+        # 🔥 IMPORTANT: Convert AI → JSON
+        result = json.loads(raw_output)
+
+        print("STEP 5: Parsed AI response")
+
+        return result
 
     except Exception as e:
-        reason.append("AI analysis unavailable")
+        print("ERROR:", str(e))
 
-    # 🔹 Final Output
-    return {
-        "stock": ticker,
-        "decision": decision,
-        "reason": ", ".join(reason),
-        "risk": risk,
-        "data": market_data
-    }
+        # 🔥 fallback (never break UI)
+        return {
+            "insight": "Unable to analyze",
+            "reason": "AI service error or invalid response",
+            "risk": "Unknown"
+        }
