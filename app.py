@@ -141,17 +141,42 @@ with left:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2.PORTFOLIO TABLE
+    # 2. PORTFOLIO TABLE 
     st.markdown('<p class="section-header">Portfolio Inventory</p>', unsafe_allow_html=True)
     
-    # Dummy Data 
+    if "selected_ticker" not in st.session_state:
+        st.session_state.selected_ticker = "RELIANCE"
+
+    # Portfolio Data 
     portfolio_df = pd.DataFrame({
-        "Ticker": ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS"],
+        "Ticker": ["RELIANCE", "TCS", "HDFCBANK", "INFY"],
         "Holdings": [15, 10, 50, 25],
         "Avg Price": [2450.00, 3200.50, 1650.20, 1420.00],
         "PnL %": ["+4.2%", "-1.5%", "+8.7%", "+2.1%"]
     })
-    st.dataframe(portfolio_df, hide_index=True, use_container_width=True)
+
+    # Capture Selection
+    event = st.dataframe(
+        portfolio_df, 
+        hide_index=True, 
+        use_container_width=True,
+        on_select="rerun", 
+        selection_mode="single-row",
+        key="portfolio_table" 
+    )
+
+    # Logic: Only process if a row is actually selected
+    if event and len(event.selection.rows) > 0:
+        selected_index = event.selection.rows[0]
+        new_ticker = portfolio_df.iloc[selected_index]["Ticker"]
+
+        # Only rerun if it's a NEW selection (prevents infinite loops)
+        if st.session_state.selected_ticker != new_ticker:
+            st.session_state.selected_ticker = new_ticker
+            st.rerun() 
+
+    # Final Target Definition
+    target = fix_ticker(st.session_state.selected_ticker)
 
     # 3. RADAR (Live Terminal)
     st.markdown("<div style='margin-bottom:20px'></div>", unsafe_allow_html=True)
