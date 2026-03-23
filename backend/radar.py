@@ -1,7 +1,7 @@
 # backend/radar.py
 
-from .utils import clean_symbol, format_currency
-from .data_fetcher import get_market_data
+from backend.utils import clean_symbol, format_currency
+from backend.data_fetcher import get_market_data
 
 def generate_radar_alerts():
     """

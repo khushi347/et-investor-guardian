@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from ai_agent import generate_advice
-from radar import generate_radar_alerts
+from backend.ai_agent import generate_advice
+from backend.radar import generate_radar_alerts
 
 app = FastAPI()
 

@@ -4,3 +4,9 @@ plotly
 pandas
 gTTS
 pandas_ta
+fastapi
+uvicorn
+yfinance
+pandas
+python-dotenv
+groq

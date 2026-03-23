@@ -1,16 +1,15 @@
-import os
-from dotenv import load_dotenv
-from groq import Groq
-<<<<<<< HEAD
 
-from data_fetcher import get_market_data
-from utils import parse_portfolio_csv   # ✅ FIXED IMPORT
+from groq import Groq
+from backend.data_fetcher import get_market_data
+from backend.utils import parse_portfolio_csv   # ✅ FIXED IMPORT
 
 # Load env
-load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
-=======
-from backend.data_fetcher import get_market_data
->>>>>>> 35e6d089ea07e38618a0f01462b12ab4f81f4387
+import os
+from dotenv import load_dotenv
+
+# ✅ correct absolute path to backend/.env
+env_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(env_path)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
