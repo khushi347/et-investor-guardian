@@ -73,7 +73,17 @@ def generate_briefing_video(stock_symbol, ai_data, veo_bg_name="guardian_bg.mp4"
     fig.write_image(temp_img, scale=2)
 
     # 2. Generate Audio
-    script = f"Guardian Alert for {stock_symbol}. {ai_data.get('insight', '')}. Impact: {ai_data.get('impact', 'Calculating')}."
+    script = f"""
+    Guardian Alert.
+
+    Stock {stock_symbol} shows the following insight.
+
+    {ai_data.get('insight', '')}.
+
+    Market impact is expected to be {ai_data.get('impact', 'moderate')}.
+
+    Proceed with caution.
+    """
     audio_path = generate_guardian_audio(script)
     audio_clip = AudioFileClip(audio_path)
 
