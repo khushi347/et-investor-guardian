@@ -3,6 +3,11 @@
 from backend.utils import clean_symbol, format_currency
 from backend.data_fetcher import get_market_data
 
+# backend/radar.py
+
+from backend.utils import clean_symbol, format_currency
+from backend.data_fetcher import get_market_data
+
 def generate_radar_alerts():
     """
     Scans the core watchbox and generates alerts based on 

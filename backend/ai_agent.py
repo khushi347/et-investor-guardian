@@ -2,15 +2,14 @@ import sys
 import os
 import json
 from dotenv import load_dotenv
+from groq import Groq
+from backend.data_fetcher import get_market_data
+from backend.utils import parse_portfolio_csv
 
-# m2's fix for imports
+# Ensure local imports work correctly
 sys.path.append(os.path.dirname(__file__))
 
 load_dotenv()
-
-from groq import Groq
-from data_fetcher import get_market_data
-from utils import parse_portfolio_csv
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -37,7 +36,6 @@ Instructions:
 - If user already holds the stock → mention it
 - Avoid suggesting over-allocation
 - Use signals (bulk deals, price change, news)
-- Keep answers short (1–2 lines max)
 
 - ALSO generate a SHORT voice script (max 30 words)
 - Script should sound natural and conversational
@@ -85,15 +83,11 @@ def calculate_impact(ticker, market_data, portfolio):
 
 
 def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
-    print("STEP 1: Fetching market data...")
-
+    # 🔹 M1: Fetch Market Data
     market_data = get_market_data(ticker)
 
-    print("STEP 2: Building AI prompt...")
-
+    # 🔹 M2: Build Prompt
     prompt = build_prompt(ticker, market_data, user_query, portfolio)
-
-    print("STEP 3: Calling AI...")
 
     try:
         chat_completion = client.chat.completions.create(
@@ -103,13 +97,13 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
 
         raw_output = chat_completion.choices[0].message.content.strip()
 
-        print("STEP 4: AI raw output:", raw_output)
+        # 🔥 Handle JSON formatting issues
+        if "```json" in raw_output:
+            raw_output = raw_output.split("```json")[1].split("```")[0].strip()
 
         result = json.loads(raw_output)
 
-        print("STEP 5: Parsed AI response")
-
-        # 🔥 impact calculation
+        # 🔥 Calculate ₹ impact
         impact = calculate_impact(ticker, market_data, portfolio)
 
         return {
@@ -117,11 +111,11 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
             "reason": result.get("reason", ""),
             "risk": result.get("risk", ""),
             "impact": impact,
-            "script": result.get("script", "")   # 🔥 NEW FIELD
+            "script": result.get("script", "")
         }
 
     except Exception as e:
-        print("ERROR:", str(e))
+        print(f"❌ AI_AGENT ERROR: {str(e)}")
 
         return {
             "insight": "Unable to analyze",
