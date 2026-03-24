@@ -8,9 +8,6 @@ sys.path.append(os.path.dirname(__file__))
 
 load_dotenv()
 
-# m2's debug line (remove later)
-
-
 from groq import Groq
 from data_fetcher import get_market_data
 from utils import parse_portfolio_csv
@@ -42,21 +39,25 @@ Instructions:
 - Use signals (bulk deals, price change, news)
 - Keep answers short (1–2 lines max)
 
+- ALSO generate a SHORT voice script (max 30 words)
+- Script should sound natural and conversational
+
 Rules:
 - Output STRICT JSON
-- Only keys: insight, reason, risk
+- Only keys: insight, reason, risk, script
 - No extra text
 
 Example:
 {{
   "insight": "Hold TCS",
-  "reason": "Since you already hold TCS, adding more may increase concentration risk",
-  "risk": "Moderate due to overexposure"
+  "reason": "You already hold TCS and signals are mixed",
+  "risk": "Moderate due to portfolio exposure",
+  "script": "Since you already hold TCS, avoid adding more. Mixed signals suggest caution and your exposure is already high."
 }}
 """
 
 
-# 🔥 NEW: ₹ IMPACT FUNCTION
+# 🔥 ₹ IMPACT FUNCTION
 def calculate_impact(ticker, market_data, portfolio):
     if not portfolio:
         return "₹0"
@@ -72,12 +73,9 @@ def calculate_impact(ticker, market_data, portfolio):
     current_price = price_data.get("current_price", 0)
     change_percent = price_data.get("change_percent", 0)
 
-    # price movement in ₹
     price_change = (change_percent / 100) * current_price
-
     impact = quantity * price_change
 
-    # format result
     if impact > 0:
         return f"+₹{int(impact)}"
     elif impact < 0:
@@ -89,7 +87,6 @@ def calculate_impact(ticker, market_data, portfolio):
 def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
     print("STEP 1: Fetching market data...")
 
-    # 🔹 M1: Market Data
     market_data = get_market_data(ticker)
 
     print("STEP 2: Building AI prompt...")
@@ -108,20 +105,19 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
 
         print("STEP 4: AI raw output:", raw_output)
 
-        # 🔥 Convert AI → JSON
         result = json.loads(raw_output)
 
         print("STEP 5: Parsed AI response")
 
-        # 🔥 NEW: Calculate impact
+        # 🔥 impact calculation
         impact = calculate_impact(ticker, market_data, portfolio)
 
-        # 🔥 FINAL CLEAN OUTPUT
         return {
             "insight": result.get("insight", ""),
             "reason": result.get("reason", ""),
             "risk": result.get("risk", ""),
-            "impact": impact
+            "impact": impact,
+            "script": result.get("script", "")   # 🔥 NEW FIELD
         }
 
     except Exception as e:
@@ -131,5 +127,6 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
             "insight": "Unable to analyze",
             "reason": "AI service error or invalid response",
             "risk": "Unknown",
-            "impact": "₹0"
+            "impact": "₹0",
+            "script": "Unable to generate briefing at this moment."
         }

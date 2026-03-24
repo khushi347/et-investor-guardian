@@ -1,4 +1,4 @@
-from ai_agent import generate_advice
+from backend.ai_agent import generate_advice
 import json
 
 print("STARTED")
