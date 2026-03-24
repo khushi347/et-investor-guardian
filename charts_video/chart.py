@@ -42,6 +42,8 @@ def plot_stock(stock_symbol):
         x=display_data['Date'], y=display_data['SMA_50'], 
         line=dict(color='#FFA500', width=1.8), # Orange 50 SMA
         name='50 SMA'
+
+        
     ))
 
     fig.add_trace(go.Scatter(

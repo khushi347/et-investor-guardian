@@ -2,21 +2,16 @@ import sys
 import os
 import json
 from dotenv import load_dotenv
-
-# m2's fix for imports
-sys.path.append(os.path.dirname(__file__))
-
-load_dotenv()
-
-# m2's debug line (remove later)
-
-
 from groq import Groq
 from data_fetcher import get_market_data
 from utils import parse_portfolio_csv
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Ensure local imports work correctly
+sys.path.append(os.path.dirname(__file__))
 
+load_dotenv()
+
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def build_prompt(ticker, market_data, user_query, portfolio):
     return f"""
@@ -55,12 +50,12 @@ Example:
 }}
 """
 
-
-# 🔥 NEW: ₹ IMPACT FUNCTION
+# 🔥 ₹ IMPACT FUNCTION: Calculates potential gains/losses based on portfolio holdings
 def calculate_impact(ticker, market_data, portfolio):
     if not portfolio:
         return "₹0"
 
+    # Clean ticker for matching (e.g., RELIANCE.NS -> RELIANCE)
     stock = ticker.replace(".NS", "")
 
     if stock not in portfolio:
@@ -72,12 +67,11 @@ def calculate_impact(ticker, market_data, portfolio):
     current_price = price_data.get("current_price", 0)
     change_percent = price_data.get("change_percent", 0)
 
-    # price movement in ₹
+    # Calculate price movement in ₹
     price_change = (change_percent / 100) * current_price
-
     impact = quantity * price_change
 
-    # format result
+    # Format result for UI
     if impact > 0:
         return f"+₹{int(impact)}"
     elif impact < 0:
@@ -85,20 +79,18 @@ def calculate_impact(ticker, market_data, portfolio):
     else:
         return "₹0"
 
-
 def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
-    print("STEP 1: Fetching market data...")
-
-    # 🔹 M1: Market Data
+    """
+    Main entry point: Fetches market data, gets AI insight, and calculates portfolio impact.
+    """
+    # 🔹 M1: Fetch real-time Market Data
     market_data = get_market_data(ticker)
 
-    print("STEP 2: Building AI prompt...")
-
+    # 🔹 M2: Build optimized prompt
     prompt = build_prompt(ticker, market_data, user_query, portfolio)
 
-    print("STEP 3: Calling AI...")
-
     try:
+        # Request completion from Groq (Llama 3.3 70B)
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.3-70b-versatile",
@@ -106,30 +98,36 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None):
 
         raw_output = chat_completion.choices[0].message.content.strip()
 
-        print("STEP 4: AI raw output:", raw_output)
-
-        # 🔥 Convert AI → JSON
+        # 🔥 Step 1: Convert AI text output to JSON
+        # Some models might wrap JSON in backticks, so we strip them if necessary
+        if "```json" in raw_output:
+            raw_output = raw_output.split("```json")[1].split("```")[0].strip()
+        
         result = json.loads(raw_output)
 
-        print("STEP 5: Parsed AI response")
-
-        # 🔥 NEW: Calculate impact
+        # 🔥 Step 2: Calculate financial impact
         impact = calculate_impact(ticker, market_data, portfolio)
 
-        # 🔥 FINAL CLEAN OUTPUT
+        # 🔥 Step 3: Return final cleaned object
         return {
-            "insight": result.get("insight", ""),
-            "reason": result.get("reason", ""),
-            "risk": result.get("risk", ""),
+            "insight": result.get("insight", "No insight provided"),
+            "reason": result.get("reason", "N/A"),
+            "risk": result.get("risk", "Unknown"),
             "impact": impact
         }
 
     except Exception as e:
-        print("ERROR:", str(e))
-
+        print(f"❌ AI_AGENT ERROR: {str(e)}")
         return {
             "insight": "Unable to analyze",
-            "reason": "AI service error or invalid response",
+            "reason": "AI service error or invalid response formatting",
             "risk": "Unknown",
             "impact": "₹0"
         }
+
+if __name__ == "__main__":
+    # Quick Test Execution
+    test_ticker = "RELIANCE.NS"
+    test_portfolio = {"RELIANCE": 10}
+    print(f"--- Testing AI Agent for {test_ticker} ---")
+    print(generate_advice(test_ticker, portfolio=test_portfolio))

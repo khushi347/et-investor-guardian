@@ -56,7 +56,6 @@ def parse_portfolio_csv(file):
         else:
             df = pd.read_excel(file)
 
-        print("RAW:", df.head())
 
         # 🔥 Strong cleaning
         df.columns = (
@@ -65,8 +64,6 @@ def parse_portfolio_csv(file):
             .str.lower()
             .str.replace(r'[^a-z0-9 ]', '', regex=True)
         )
-
-        print("CLEANED COLUMNS:", df.columns.tolist())
 
         ticker_col = None
         qty_col = None
@@ -77,7 +74,6 @@ def parse_portfolio_csv(file):
             if 'qty' in col or 'hold' in col or 'quantity' in col:
                 qty_col = col
 
-        print("DETECTED:", ticker_col, qty_col)
 
         if ticker_col is None or qty_col is None:
             return {}
@@ -95,8 +91,7 @@ def parse_portfolio_csv(file):
 
                 portfolio[symbol] = qty
 
-        print("FINAL PORTFOLIO:", portfolio)
-
+    
         return portfolio
 
     except Exception as e:
