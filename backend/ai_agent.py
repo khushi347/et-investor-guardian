@@ -3,8 +3,8 @@ import os
 import json
 from dotenv import load_dotenv
 from groq import Groq
-from data_fetcher import get_market_data
-from utils import parse_portfolio_csv
+from backend.data_fetcher import get_market_data
+from backend.utils import parse_portfolio_csv
 
 # Ensure local imports work correctly
 sys.path.append(os.path.dirname(__file__))

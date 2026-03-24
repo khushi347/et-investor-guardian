@@ -1,108 +1,94 @@
+import os
+import sys
 import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
 import pandas_ta as ta
+from moviepy import ImageClip, AudioFileClip
+import imageio_ffmpeg
+
+# Set FFmpeg path for Windows
+os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
+
+# Ensure voice.py can be imported from the same directory
+sys.path.append(os.path.dirname(__file__))
+from voice import generate_guardian_audio
 
 def plot_stock(stock_symbol):
-    # 1. Fetch 1 year of data to calculate the 200 SMA 
+    """Fetches data and builds the Plotly figure."""
     data = yf.download(stock_symbol, period="1y", interval="1d")
     if data.empty: return None
     data.columns = data.columns.get_level_values(0)
 
-    # 2. Calculate Indicators
     data['SMA_50'] = ta.sma(data['Close'], length=50)
     data['SMA_200'] = ta.sma(data['Close'], length=200)
     data['RSI'] = ta.rsi(data['Close'], length=14)
 
-    # Signal Logic: Golden Cross (50 crosses above 200)
-    data['Prev_SMA_50'] = data['SMA_50'].shift(1)
-    data['Prev_SMA_200'] = data['SMA_200'].shift(1)
-    
-    golden_cross = data[(data['SMA_50'] > data['SMA_200']) & (data['Prev_SMA_50'] <= data['Prev_SMA_200'])]
-    
-    # Signal Logic: RSI Extremes
-    rsi_oversold = data[data['RSI'] < 30]
-    rsi_overbought = data[data['RSI'] > 70]
-
-    # Slice for the last 6 months for the actual display
     display_data = data.tail(120).reset_index()
-    golden_cross_display = golden_cross[golden_cross.index >= display_data['Date'].min()]
-
-    # 3. Create Chart
+    
     fig = go.Figure()
-
-    # Base Candlesticks
     fig.add_trace(go.Candlestick(
         x=display_data['Date'], open=display_data['Open'], high=display_data['High'],
         low=display_data['Low'], close=display_data['Close'], name='Price'
     ))
 
-    # ---SMA TRACES---
-    fig.add_trace(go.Scatter(
-        x=display_data['Date'], y=display_data['SMA_50'], 
-        line=dict(color='#FFA500', width=1.8), # Orange 50 SMA
-        name='50 SMA'
-
-        
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=display_data['Date'], y=display_data['SMA_200'], 
-        line=dict(color='#FF0000', width=1.8), # Red 200 SMA
-        name='200 SMA'
-    ))
-    # --------------------------------------------------
-
-    # Golden Cross Markers
-    fig.add_trace(go.Scatter(
-        x=golden_cross_display.index, y=golden_cross_display['SMA_50'],
-        mode='markers', name='GOLDEN CROSS',
-        marker=dict(symbol='triangle-up', size=15, color='#00ff00', line=dict(width=2, color='white'))
-    ))
-
-    # RSI Oversold (Buy Signal) Markers
-    fig.add_trace(go.Scatter(
-        x=display_data[display_data['RSI'] < 30]['Date'], 
-        y=display_data[display_data['RSI'] < 30]['Low'] * 0.98,
-        mode='markers', name='RSI Oversold',
-        marker=dict(symbol='circle', size=8, color='#00d9ff')
-    ))
-
-    # 4.Styling 
-    visible_high = display_data['High'].max()
-    visible_low = display_data['Low'].min()
-    padding = (visible_high - visible_low) * 0.15 
+    fig.add_trace(go.Scatter(x=display_data['Date'], y=display_data['SMA_50'], line=dict(color='#FFA500', width=1.8), name='50 SMA'))
+    fig.add_trace(go.Scatter(x=display_data['Date'], y=display_data['SMA_200'], line=dict(color='#FF0000', width=1.8), name='200 SMA'))
 
     fig.update_layout(
-        template="plotly_dark",
-        height=650,
-        margin=dict(l=50, r=10, t=50, b=50), 
-        xaxis_rangeslider_visible=False,
-        paper_bgcolor='#0b1117',
-        plot_bgcolor='#0b1117',
-        hovermode='x unified',
-        
-        #Sharpness Settings
-        dragmode='pan',
-        newshape=dict(line_color='cyan'),
+        template="plotly_dark", height=720, width=1280,
+        xaxis_rangeslider_visible=False, paper_bgcolor='#0b1117', plot_bgcolor='#0b1117',
     )
-
-    #Refined Sharpness 
-    fig.update_yaxes(
-    gridcolor='#1F2937',
-    automargin=True,
-    range=[visible_low - padding, visible_high + padding],
-    tickprefix="$", 
-    separatethousands=True,
-    tickfont=dict(color="#9CA3AF", size=11),
-    showline=True,
-    linewidth=1,
-    linecolor='#1F2937'
-    )
-
-    fig.update_xaxes(
-    gridcolor='#1F2937',
-    automargin=True
-    )
-
+    fig.update_yaxes(tickprefix="₹", gridcolor='#1F2937')
     return fig
+
+def generate_briefing_video(stock_symbol, ai_data):
+    """Renders chart to image, generates audio, and stitches video."""
+    print(f"🎬 Processing Guardian Briefing for {stock_symbol}...")
+
+    # 1. SAVE CHART AS IMAGE (Missing in your previous version)
+    fig = plot_stock(stock_symbol)
+    temp_img = os.path.join(os.path.dirname(__file__), "temp_chart.png")
+    fig.write_image(temp_img, engine="kaleido", scale=2)
+
+    # 2. GENERATE AUDIO PATH
+    script = f"Guardian Alert for {stock_symbol}. {ai_data['insight']}. Estimated impact: {ai_data['impact']}."
+    audio_path = generate_guardian_audio(script)
+
+    if not audio_path or not os.path.exists(audio_path):
+        print("❌ Audio file not found!")
+        return
+
+    # 3. LOAD CLIPS (Using MoviePy 2.0+ syntax)
+    audio_clip = AudioFileClip(audio_path)
+    video_clip = ImageClip(temp_img).with_duration(audio_clip.duration)
+    
+    # 4. EXPLICITLY MERGE
+    final_video = video_clip.with_audio(audio_clip)
+
+    # 5. EXPORT
+    output_name = f"Guardian_{stock_symbol.split('.')[0]}.mp4"
+    print("⏳ Rendering final video...")
+    
+    final_video.write_videofile(
+        output_name, 
+        fps=10, 
+        codec="libx264", 
+        audio_codec="libmp3lame", 
+        temp_audiofile="temp-audio.mp3", 
+        remove_temp=True
+    )
+    
+    # 6. CLEANUP & RELEASE
+    audio_clip.close()
+    video_clip.close()
+    if os.path.exists(temp_img): os.remove(temp_img)
+    
+    print(f"🚀 SUCCESS: {output_name} is ready with sound.")
+
+if __name__ == "__main__":
+    sample_data = {
+        "insight": "RSI is currently oversold. Potential rebound expected at support levels.",
+        "impact": "+₹3,500"
+    }
+    generate_briefing_video("RELIANCE.NS", sample_data)

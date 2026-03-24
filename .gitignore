@@ -1,6 +1,10 @@
 __pycache__/
-*.py[cod]
 venv/
+*.py[cod]
 .env
-output.mp3
+*.mp4
+*.mp3
 *.png
+temp-audio.mp3
+temp_chart.png
+output.mp3
