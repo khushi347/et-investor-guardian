@@ -4,175 +4,182 @@ import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
 import pandas_ta as ta
-from moviepy import VideoFileClip, ImageClip, AudioFileClip, CompositeVideoClip,ColorClip
-import imageio_ffmpeg
+import time
 from PIL import Image, ImageDraw, ImageFont
+from moviepy import ImageClip, ColorClip, AudioFileClip, CompositeVideoClip
+from gtts import gTTS
 
-# Set FFmpeg path for Windows stability
-os.environ["IMAGEIO_FFMPEG_EXE"] = imageio_ffmpeg.get_ffmpeg_exe()
+# Ensure local imports work correctly
+script_dir = os.path.dirname(__file__)
+sys.path.append(script_dir)
 
-# Import your voice logic
-sys.path.append(os.path.dirname(__file__))
-from voice import generate_guardian_audio
-
+try:
+    from voice import generate_guardian_audio
+except ImportError:
+    # Fallback if voice.py is in the same directory
+    from charts_video.voice import generate_guardian_audio
 
 def plot_stock(stock_symbol):
-    """Fetches real-time NSE data and builds the Plotly figure."""
+    """Fetches data, calculates indicators, and saves a PNG for the video engine."""
+    # 1. Fetch 1 year of data
     data = yf.download(stock_symbol, period="1y", interval="1d")
+    
     if data.empty:
         return None
-    data.columns = data.columns.get_level_values(0)
+    
+    # Standardize MultiIndex columns from yfinance
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
 
-    # Indicators
+    # 2. Indicators Calculation
     data['SMA_50'] = ta.sma(data['Close'], length=50)
     data['SMA_200'] = ta.sma(data['Close'], length=200)
     data['RSI'] = ta.rsi(data['Close'], length=14)
 
-    display_data = data.tail(100).reset_index()
-
+    # 3. Display Data (Last 120 days)
+    display_data = data.tail(120).reset_index()
+    
+    # 4. Create War Room Figure
     fig = go.Figure()
+
+    # Main Candlesticks
     fig.add_trace(go.Candlestick(
         x=display_data['Date'],
         open=display_data['Open'],
         high=display_data['High'],
         low=display_data['Low'],
         close=display_data['Close'],
-        name='Price'
+        name='Price',
+        increasing_line_color='#00FFAB', decreasing_line_color='#FF4B4B'
     ))
 
-    # Styling for the 'Hologram' look
+    # SMA Traces
+    fig.add_trace(go.Scatter(
+        x=display_data['Date'], y=display_data['SMA_50'], 
+        line=dict(color='#FFA500', width=1.8), name='50 SMA'
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=display_data['Date'], y=display_data['SMA_200'], 
+        line=dict(color='#FF0000', width=1.8), name='200 SMA'
+    ))
+
+    oversold_data = display_data[display_data['RSI'] < 30]
+    
+    if not oversold_data.empty:
+        fig.add_trace(go.Scatter(
+            x=oversold_data['Date'], 
+            # Position markers slightly below the daily low for better visibility
+            y=oversold_data['Low'] * 0.98, 
+            mode='markers',
+            name='RSI Oversold (Potential Buy)',
+            marker=dict(
+                symbol='circle',
+                size=12,
+                color='#00D4FF', # Matches your Guardian Neon Blue
+                line=dict(width=1, color='white')
+            ),
+            hoverinfo='text',
+            text=[f"RSI: {r:.2f}" for r in oversold_data['RSI']]
+        ))
+
+    # 5. Styling
+    visible_high = display_data['High'].max()
+    visible_low = display_data['Low'].min()
+    padding = (visible_high - visible_low) * 0.15 
+
     fig.update_layout(
         template="plotly_dark",
-        height=800,
-        width=1200,
+        height=650,
+        margin=dict(l=50, r=20, t=50, b=50),
         xaxis_rangeslider_visible=False,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(10,17,23,0.8)',
+        paper_bgcolor='#050A14', 
+        plot_bgcolor='#050A14',
+        hovermode='x unified',
+        legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center", bgcolor="rgba(0,0,0,0)")
     )
-    fig.update_yaxes(tickprefix="₹", gridcolor='#1F2937')
 
+    fig.update_yaxes(range=[visible_low - padding, visible_high + padding], tickprefix="₹")
+
+    # --- CRITICAL: SAVE IMAGE FOR VIDEO ENGINE ---
+    chart_img_path = os.path.join(script_dir, "temp_chart.png")
+    fig.write_image(chart_img_path, width=1200, height=700, scale=2)
+    
     return fig
 
-
-def generate_briefing_video(stock_symbol, ai_data, veo_bg_name="guardian_bg.mp4"):
-    """The Winning Engine: Layers Live Chart + AI Voice + Veo Background."""
-
-    # Smart Pathing: Find files relative to THIS script's location
-    script_dir = os.path.dirname(__file__)
-    veo_bg_path = os.path.join(script_dir, veo_bg_name)
-    temp_img = os.path.join(script_dir, "temp_chart.png")
-
-    if not os.path.exists(veo_bg_path):
-        print(f"❌ Error: {veo_bg_name} not found in {script_dir}")
-        return None
-
-    print(f"🏆 Orchestrating Briefing for {stock_symbol}...")
-
-    # 1. Save Chart as PNG
-    fig = plot_stock(stock_symbol)
-    fig.write_image(temp_img, scale=2)
-
-    # 2. Generate Audio
-    script = f"""
-    Guardian Alert.
-
-    Stock {stock_symbol} shows the following insight.
-
-    {ai_data.get('insight', '')}.
-
-    Market impact is expected to be {ai_data.get('impact', 'moderate')}.
-
-    Proceed with caution.
-    """
-    audio_path = generate_guardian_audio(script)
+def generate_briefing_video(ticker, advice_data):
+    """Generates the ET Markets style video using MoviePy 2.0+."""
+    stock_name = ticker.replace(".NS", "")
+    
+    # 1. GENERATE AUDIO (Determines Duration)
+    voice_script = advice_data.get('script', f"Guardian analysis for {stock_name} is ready.")
+    audio_path = generate_guardian_audio(voice_script)
+    
     audio_clip = AudioFileClip(audio_path)
+    duration = audio_clip.duration
+    output_path = os.path.join(script_dir, f"FINAL_REPORT_{stock_name}.mp4")
 
-    # 3. Load & Setup Background
-    bg_clip = VideoFileClip(veo_bg_path)
-    target_w, target_h = 1280, 720
-    crop_w = min(bg_clip.w, 1920)
-    crop_h = min(bg_clip.h, 1080)
+    # 2. WAIT FOR IMAGE SYNC
+    # Ensure plot_stock was called recently to generate 'temp_chart.png'
+    chart_img_path = os.path.join(script_dir, "temp_chart.png")
+    time.sleep(1.0) # Buffer for file system I/O
 
-    x1 = (bg_clip.w - crop_w) / 2
-    y1 = (bg_clip.h - crop_h) / 2
-    x2 = x1 + crop_w
-    y2 = y1 + crop_h
+    # 3. CONSTRUCT LAYERS (v2.0 syntax)
+    # Layer 0: Background
+    bg = ColorClip(size=(1280, 720), color=(5, 15, 30)).with_duration(duration)
 
-    bg_clip = bg_clip.cropped(x1=x1, y1=y1, x2=x2, y2=y2)\
-                 .resized(new_size=(target_w, target_h))
+    # Layer 1: Chart
+    if os.path.exists(chart_img_path):
+        chart_clip = (ImageClip(chart_img_path)
+                      .with_duration(duration)
+                      .resized(width=1050) 
+                      .with_position(("center", 60)))
+    else:
+        chart_clip = ColorClip(size=(100, 100), color=(255, 0, 0)).with_duration(duration)
 
-    # Check if audio is longer than video
-    if audio_clip.duration > bg_clip.duration:
-        from moviepy import concatenate_videoclips
-        n_loops = int(audio_clip.duration / bg_clip.duration) + 1
-        bg_clip = concatenate_videoclips([bg_clip] * n_loops)
-
-    # Trim to match audio exactly
-    bg_clip = bg_clip.with_duration(audio_clip.duration)
-
-    # 4. Create Overlay (FIXED CENTER ALIGNMENT)
-    chart_overlay = (ImageClip(temp_img)
-                     .with_duration(audio_clip.duration)
-                     .resized(0.55)
-                     .with_opacity(1.0)
-                     .with_position(("center", "center")))
-
-        # 4.5 Create Subtitle
-        # 4.5 Create Bottom Info Panel (NO TextClip issues)
-
-    # 4.5 Create Bottom Panel with TEXT (Stable Method)
-
-    panel_height = 120
-    panel_width = 1280
-
-    # Create image
-    panel_img = Image.new("RGBA", (panel_width, panel_height), (0, 0, 0, 160))
+    # Layer 2: Lower Third Panel
+    panel_h = 150
+    panel_img = Image.new("RGBA", (1280, panel_h), (10, 30, 60, 240))
     draw = ImageDraw.Draw(panel_img)
+    draw.rectangle([0, 0, 1280, 8], fill="#00D4FF") # Neon Accent
+    
+    try:
+        # Check standard Windows font paths
+        font_main = ImageFont.truetype("arial.ttf", 45)
+        font_sub = ImageFont.truetype("arial.ttf", 26)
+    except:
+        font_main = font_sub = ImageFont.load_default()
 
-    # Load font (safe)
-    font_path = "C:/Windows/Fonts/arial.ttf"
-    font = ImageFont.truetype(font_path, 28)
+    draw.text((70, 30), f"GUARDIAN NODE: {stock_name}", font=font_main, fill="#00D4FF")
+    draw.text((70, 90), f"{advice_data.get('insight', 'HOLD')} | IMPACT: {advice_data.get('impact', '₹0')}", font=font_sub, fill="white")
+    
+    panel_temp = os.path.join(script_dir, "temp_panel_render.png")
+    panel_img.save(panel_temp)
+    panel_overlay = (ImageClip(panel_temp)
+                    .with_duration(duration)
+                    .with_position(("center", "bottom")))
 
-    # Text content
-    text = f"{stock_symbol}: {ai_data.get('insight', '')} | Impact: {ai_data.get('impact', '')}"
+    # 4. FINAL COMPOSITE
+    final_video = CompositeVideoClip([bg, chart_clip, panel_overlay])
+    final_video = final_video.with_audio(audio_clip).with_duration(duration)
 
-    # Draw text
-    draw.text((40, 35), text, font=font, fill=(255, 255, 255))
-
-    # Save temp panel
-    panel_path = os.path.join(script_dir, "temp_panel.png")
-    panel_img.save(panel_path)
-
-    # Convert to clip
-    panel = (ImageClip(panel_path)
-            .with_duration(audio_clip.duration)
-         .with_position(("center", 720 - panel_height)))
-
-
-    final_video = CompositeVideoClip([
-    bg_clip,
-    chart_overlay,
-    panel
-    ]).with_audio(audio_clip)
-
-    output_name = f"GUARDIAN_REPORT_{stock_symbol.split('.')[0]}.mp4"
-    output_path = os.path.join(script_dir, output_name)
-
+    # 5. RENDER
     final_video.write_videofile(
-        output_path,
-        fps=12,
-        codec="libx264",
-        audio_codec="libmp3lame",
-        preset="ultrafast",
-        logger=None
+        output_path, 
+        fps=15, 
+        codec="libx264", 
+        audio_codec="aac", 
+        preset="ultrafast", 
+        logger=None,
+        threads=4
     )
 
-    # 6. Cleanup
+    # 6. CLEANUP
     audio_clip.close()
-    bg_clip.close()
-    if os.path.exists(temp_img):
-        os.remove(temp_img)
-    if os.path.exists(panel_path):
-        os.remove(panel_path)
+    try:
+        if os.path.exists(audio_path): os.remove(audio_path)
+        if os.path.exists(panel_temp): os.remove(panel_temp)
+    except:
+        pass # Files might be locked by system
 
     return output_path
