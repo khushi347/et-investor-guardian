@@ -4,7 +4,7 @@ venv/
 .env
 *.mp4
 *.mp3
-*.png
 temp-audio.mp3
 temp_chart.png
 output.mp3
+!screenshots/*.png
