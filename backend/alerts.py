@@ -1,10 +1,4 @@
-# alerts.py
-
-
 from utils import generate_id, get_confidence
-
-"id": generate_id(i),
-"confidence": get_confidence(alert["type"])
 from radar import generate_radar_alerts
 
 
@@ -15,11 +9,11 @@ def get_alerts():
 
     for i, alert in enumerate(raw_alerts):
         formatted.append({
-            "id": i + 1,
+            "id": generate_id(i),  
             "stock": alert["stock"],
             "event": alert["event"],
             "explanation": alert["explanation"],
-            "confidence": "High" if alert["type"] == "bulk" else "Medium"
+            "confidence": get_confidence(alert["type"])  
         })
 
     return formatted

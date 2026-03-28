@@ -9,7 +9,6 @@ from PIL import Image, ImageDraw, ImageFont
 from moviepy import ImageClip, ColorClip, AudioFileClip, CompositeVideoClip
 from gtts import gTTS
 
-# Ensure local imports work correctly
 script_dir = os.path.dirname(__file__)
 sys.path.append(script_dir)
 
@@ -76,7 +75,7 @@ def plot_stock(stock_symbol):
             marker=dict(
                 symbol='circle',
                 size=12,
-                color='#00D4FF', # Matches your Guardian Neon Blue
+                color='#00D4FF', 
                 line=dict(width=1, color='white')
             ),
             hoverinfo='text',
@@ -101,7 +100,7 @@ def plot_stock(stock_symbol):
 
     fig.update_yaxes(range=[visible_low - padding, visible_high + padding], tickprefix="₹")
 
-    # --- CRITICAL: SAVE IMAGE FOR VIDEO ENGINE ---
+    #  IMAGE FOR VIDEO ENGINE 
     chart_img_path = os.path.join(script_dir, "temp_chart.png")
     fig.write_image(chart_img_path, width=1200, height=700, scale=2)
     
@@ -111,7 +110,7 @@ def generate_briefing_video(ticker, advice_data):
     """Generates the ET Markets style video using MoviePy 2.0+."""
     stock_name = ticker.replace(".NS", "")
     
-    # 1. GENERATE AUDIO (Determines Duration)
+    # 1. GENERATE AUDIO 
     voice_script = advice_data.get('script', f"Guardian analysis for {stock_name} is ready.")
     audio_path = generate_guardian_audio(voice_script)
     
@@ -124,7 +123,7 @@ def generate_briefing_video(ticker, advice_data):
     chart_img_path = os.path.join(script_dir, "temp_chart.png")
     time.sleep(1.0) # Buffer for file system I/O
 
-    # 3. CONSTRUCT LAYERS (v2.0 syntax)
+    # 3. CONSTRUCT LAYERS 
     # Layer 0: Background
     bg = ColorClip(size=(1280, 720), color=(5, 15, 30)).with_duration(duration)
 
@@ -180,6 +179,6 @@ def generate_briefing_video(ticker, advice_data):
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(panel_temp): os.remove(panel_temp)
     except:
-        pass # Files might be locked by system
+        pass 
 
     return output_path

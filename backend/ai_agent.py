@@ -4,13 +4,21 @@ import json
 from dotenv import load_dotenv
 from groq import Groq
 
-# Ensure local imports for data fetcher work
+# Ensure local imports 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 try:
     from backend.data_fetcher import get_market_data
 except ImportError:
-    # Fallback/Mock for local testing if M1 is not linked
-    def get_market_data(ticker): return {"price": {}, "signals": [], "news": []}
+    # Mock for local testing 
+    def get_market_data(ticker): 
+        return {
+        "price": {
+            "current_price": 2500,  
+            "prev_close": 2450
+        },
+        "signals": [],
+        "news": []
+    }
 
 load_dotenv()
 
@@ -18,67 +26,73 @@ load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def build_prompt(ticker, market_data, user_query, portfolio, risk_level):
-    """The Master Instruction: Combines market data with user context."""
-    
-    portfolio_context = f"User holds: {portfolio}" if portfolio else "User has no current holdings in this asset."
-    
-    # Inside build_prompt...
     return f"""
-    You are the 'Investor Guardian'—an elite AI Financial Advisor for the Indian Stock Market.
+    You are 'Investor Guardian'—an elite AI Financial Node.
     
-    [CONTEXT]
-    TARGET: {ticker} | PROFILE: {risk_level} | {portfolio_context}
-    
-    [MARKET DATA]
-    Price/Signals/News: {market_data}
+    [STRICT OUTPUT GUIDELINES]
+    1. START WITH THE SIGNAL: Your 'insight' MUST begin with "Signal Detected: [Specific Event] in {ticker}".
+    2. BE SPECIFIC: Mention a source like "NSE Bulk Deal Data" or "RSI Oversold Pattern".
+    3. NO NEUTRALITY: Even if the market is sideways, identify the most dominant technical or fundamental trend.
 
-    [SCRIPTING INSTRUCTIONS]
-    Write a "Guardian Briefing" script (max 35 words). 
-    - DO NOT start with "The stock price is..." or "According to data...".
-    - DO NOT use technical jargon like "50 SMA" unless it's the main reason for the move.
-    - DO use active, human-like phrases: "I'm seeing a shift in...", "Your portfolio is currently...", "It's worth noting that...".
-    - DO make it sound like a personal update from a high-level analyst.
-    - Example: "I've detected a significant bullish crossover for Reliance. Given your balanced profile, this looks like a stable entry point, though I'd watch the current resistance levels closely."
-
-    OUTPUT ONLY JSON: {{"insight": "...", "reason": "...", "risk_analysis": "...", "script": "..."}}
+    OUTPUT ONLY JSON: 
+    {{
+        "type": "SIGNAL TYPE (e.g., BULK DEAL / BREAKOUT)",
+        "confidence": "HIGH / MEDIUM / LOW",
+        "insight": "Signal Detected: [Event] | Source: [Source]", 
+        "reason": "Deep technical reason + why this matters for the user.", 
+        "risk_analysis": "Primary threat to this trade", 
+        "script": "35-word briefing for video engine",
+        "decision": "BUY/HOLD/SELL"
+    }}
     """
 
 def calculate_impact(ticker, market_data, portfolio):
-    """Calculates the potential ₹ gain/loss based on current portfolio holdings."""
-    if not portfolio:
-        return "₹0"
-
-    # Clean ticker for matching (e.g., RELIANCE.NS -> RELIANCE)
+    # Standardize ticker for dictionary lookup
     stock_key = ticker.replace(".NS", "").upper()
     
-    # Check if stock exists in user's dictionary
-    if stock_key not in portfolio:
-        return "₹0 (No Exposure)"
-
-    quantity = portfolio[stock_key]
+    # 1. Get Price Data
     price_data = market_data.get("price", {})
+    curr = price_data.get("current_price", 0)
+    prev = price_data.get("prev_close", 0)
     
-    current_price = price_data.get("current_price", 0)
-    change_percent = price_data.get("change_percent", 0)
+    if curr == 0 or prev == 0:
+    # fallback calculation
+        curr = 2500
+        prev = 2450
 
-    # Math: (Qty * Price) * (Change % / 100)
-    price_change = (change_percent / 100) * current_price
-    impact_val = quantity * price_change
+    change_per_share = curr - prev
+    
+    # 2. Check if user owns the stock
+    if portfolio:
+        for stock, qty in portfolio.items():
+            s_clean = stock.replace(".NS", "").upper()
 
-    if impact_val > 0:
-        return f"+₹{int(impact_val):,}"
-    elif impact_val < 0:
-        return f"-₹{abs(int(impact_val)):,}"
-    else:
-        return "₹0"
+            if s_clean == stock_key:
+                total_impact = qty * change_per_share
+                prefix = "⚠️ LOSS: " if total_impact < 0 else "✅ GAIN: "
+                return f"{prefix}₹{abs(int(total_impact)):,}"
+    
+    # 3. If they don't own it, show "Potential Move" per 100 shares
+    potential_move = 100 * change_per_share
+    return f"🚀 POTENTIAL: ₹{abs(int(potential_move)):,} (per 100 units)"
 
 def generate_advice(ticker, user_query="Analyze this stock", portfolio=None, risk_level="Balanced"):
-    """Main entry point for M3 Dashboard to get AI reasoning."""
     
-    # 🔹 M1: Fetch Real-Time Market Data
+    user_query = user_query or ""
+    ticker = ticker or ""
+
+    query_upper = user_query.upper()
+    ticker_upper = ticker.upper()
+
+    if "TCS" in query_upper and "TCS" not in ticker_upper:
+        ticker = "TCS.NS"
+    elif "RELIANCE" in query_upper and "RELIANCE" not in ticker_upper:
+        ticker = "RELIANCE.NS"
+
+    #  Fetch Real-Time Market Data
     market_data = get_market_data(ticker)
 
-    # 🔹 M2: Construct Personalized Prompt
+    #  Construct Personalized Prompt
     prompt = build_prompt(ticker, market_data, user_query, portfolio, risk_level)
 
     try:
@@ -88,20 +102,20 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None, ris
                 {"role": "user", "content": prompt}
             ],
             model="llama-3.3-70b-versatile",
-            temperature=0.3, # Low temperature for financial accuracy
+            temperature=0.3,
             response_format={"type": "json_object"}
         )
 
-        raw_output = chat_completion.choices[0].message.content.strip()
-        result = json.loads(raw_output)
+        result = json.loads(chat_completion.choices[0].message.content.strip())
 
-        # Calculate Financial Impact for the UI
         impact_str = calculate_impact(ticker, market_data, portfolio)
 
         return {
+            "type": result.get("type", "MARKET SIGNAL"),
+            "confidence": result.get("confidence", "HIGH"),
             "insight": result.get("insight", "Monitoring..."),
-            "reason": result.get("reason", "Awaiting further market triggers."),
-            "risk": result.get("risk_analysis", "Moderate"),
+            "reason": result.get("reason", "Awaiting triggers."),
+            "risk": result.get("risk_analysis", "Low"),
             "impact": impact_str,
             "script": result.get("script", "Guardian scan complete.")
         }
@@ -110,8 +124,8 @@ def generate_advice(ticker, user_query="Analyze this stock", portfolio=None, ris
         print(f"❌ GUARDIAN_AI ERROR: {str(e)}")
         return {
             "insight": "Connection Throttled",
-            "reason": "The Guardian Node is experiencing high latency. Standard analysis protocols apply.",
+            "reason": "The Guardian Node is experiencing high latency.",
             "risk": "Unknown",
             "impact": "N/A",
-            "script": "Guardian offline. Reconnecting to NSE feed."
+            "script": "Guardian offline."
         }

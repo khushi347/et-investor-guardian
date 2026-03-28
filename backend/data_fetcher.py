@@ -18,23 +18,38 @@ def get_market_data(ticker):
         # =========================
         # 📊 1. PRICE DATA
         # =========================
-        hist = stock.history(period="2d")
+        hist = stock.history(period="5d")  
 
-        if not hist.empty:
-            latest = hist.iloc[-1]
-            prev = hist.iloc[-2]
+        if hist is not None and not hist.empty:
+            
+            if len(hist) >= 2:
+                latest = hist.iloc[-1]
+                prev = hist.iloc[-2]
 
-            change_percent = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
+                change_percent = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
 
-            result["price"] = {
+                result["price"] = {
+                    "current_price": float(round(latest["Close"], 2)),
+                    "prev_close": float(round(prev["Close"], 2)),   
+                    "change_percent": float(round(change_percent, 2))
+                }
+
+            else:
+                # only 1 row available
+                latest = hist.iloc[-1]
+
+                result["price"] = {
                 "current_price": float(round(latest["Close"], 2)),
-                "change_percent": float(round(change_percent, 2))
-            }
+                "prev_close": float(round(latest["Close"], 2)),  # ✅ fallback
+                "change_percent": 0.0
+                }
+
         else:
             result["price"] = {
-                "current_price": 0,
-                "change_percent": 0
-            }
+            "current_price": 0.0,
+            "prev_close": 0.0,   # ✅ ADD THIS
+            "change_percent": 0.0
+             }
 
         # =========================
         # 🏦 2. BULK/BLOCK DEALS (SIMULATED)

@@ -3,12 +3,12 @@ import pandas as pd
 from datetime import datetime
 
 
-# 📅 Get current timestamp
+#  Get current timestamp
 def get_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-# 💰 Format currency nicely
+# Format currency nicely
 def format_currency(value):
     try:
         return f"₹{round(value, 2)}"
@@ -16,7 +16,7 @@ def format_currency(value):
         return "₹0"
 
 
-# 📊 Determine price trend
+# Determine price trend
 def get_trend(change):
     if change > 0:
         return "UP 📈"
@@ -26,7 +26,7 @@ def get_trend(change):
         return "STABLE"
 
 
-# 🎯 Confidence logic (important for AI + UI)
+#  Confidence logic 
 def get_confidence(alert_type):
     if alert_type == "bulk":
         return "High"
@@ -57,7 +57,7 @@ def parse_portfolio_csv(file):
             df = pd.read_excel(file)
 
 
-        # 🔥 Strong cleaning
+        # Strong cleaning
         df.columns = (
             df.columns
             .str.strip()
